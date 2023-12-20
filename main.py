@@ -1,8 +1,11 @@
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')
+import numpy as np
+import creature
+
+
+def main():
+    test_creature = creature.Creature(5)
+    print(test_creature.move())
+
 
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    main()
