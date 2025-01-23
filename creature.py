@@ -1,8 +1,7 @@
 import numpy as np
 
 
-# Note: Experiment with different activation functions
-# Change to tanh possibly because with few neurons it seems that ReLU can output 0
+# It seems that ReLU can output 0
 # a lot and make it so that everything in the end is a zero.
 # ReLU activation function for neural network.
 def relu(x):
@@ -33,11 +32,11 @@ def modify_random_elements(arr, fraction=0.1, magnitude=0.5):
 
 # These functions are stored in variables to make them more efficient, as they are called many times.
 # ReLU but applied to an entire list.
-vectorized_relu = np.vectorize(relu)
+vectorized_relu = np.vectorize(relu, [float])
 
 
 # Hyperbolic tangent activation function.
-vectorized_tanh = np.vectorize(np.tanh)
+vectorized_tanh = np.vectorize(np.tanh, [float])
 
 
 # Softmax activation function for last layer in neural network.
@@ -50,12 +49,14 @@ def softmax(x):
 # with weights and internal neurons. It is the same for all the creatures, only weights differ.
 # In order to add a new action or sense you need to add the neuron types name to this list, and also
 # add its functionality to the sense function.
-# Testing is_safe sensory neuron and its affects
 sensory_neuron_list = np.array(["x_coordinate", "y_coordinate", "time", "always_active", "oscillating"])
-output_neuron_list = np.array(["move_up", "move_down", "move_left", "move_right"])
+output_neuron_list = np.array(["move_up", "move_down", "move_left", "move_right", "nothing"])
 
 # Set this to true if you want creatures to use biases in their neural networks, otherwise false.
 USE_BIAS = True
+
+# The activation function used in the neural network.
+ACTIVATION_FUNCTION = vectorized_tanh
 
 
 # Creature class, stores a creature, which includes its neural network and position.
@@ -90,7 +91,7 @@ class Creature:
 
             self.color = (np.random.randint(0, 255), np.random.randint(0, 200), np.random.randint(0, 255))
 
-        self.vectorized_sense = np.vectorize(self.sense)
+        self.vectorized_sense = np.vectorize(self.sense, [float])
 
     # This function senses things about the creature and returns them for the neural
     # network to use as input. The neuron type refers to what information is to be
@@ -103,7 +104,7 @@ class Creature:
         elif neuron_type == "time":
             return self.steps/100
         elif neuron_type == "always_active":
-            return 0
+            return 1
         elif neuron_type == "oscillating":
             return np.sin(self.steps)
         else:
@@ -117,17 +118,17 @@ class Creature:
 
         # Apply weights and activation function to the input
         if USE_BIAS:
-            move = vectorized_tanh(np.dot(self.sensory_to_internal_weights, move) + self.internal_biases)
+            move = ACTIVATION_FUNCTION(np.dot(self.sensory_to_internal_weights, move) + self.internal_biases)
             move = softmax(np.dot(self.internal_to_output_weights, move) + self.output_biases)
         else:
-            move = vectorized_tanh(np.dot(self.sensory_to_internal_weights, move))
+            move = ACTIVATION_FUNCTION(np.dot(self.sensory_to_internal_weights, move))
             move = softmax(np.dot(self.internal_to_output_weights, move))
         # Get a string name to return for an action to make.
         move = output_neuron_list[np.argmax(move)]
 
         return move
 
-    # For future: Possibly make it so that the creatures can interact,
+    # For future: Possibly make it so that the creatures can interact with each other and more things in the world.
     # This function both gets the move from the neural network and then does the action based on that move.
     # If you want to implement more actions, you will implement their functionality here. Don't forget to also add the
     # neurons to the output neuron list too though.
@@ -144,7 +145,7 @@ class Creature:
             self.x_coordinate += 1
         elif move == "move_left":
             self.x_coordinate -= 1
-        else:
+        elif move != "nothing":
             raise ValueError(f"Move {move} outputted by neural network is not recognized as a valid move. You may have" +
                              f" added a neuron to the output list without implementing its function.")
 
@@ -168,13 +169,39 @@ class Creature:
     # mutations to happen.
     # Modify this so that it can set ones to 0 and it can also completely change weights instead of just adding or subtracting.
     def mutate(self, learning_rate):
-        new_red = self.color[0] + np.random.randint(-200 * learning_rate, 200 * learning_rate)
-        new_green = self.color[1] + np.random.randint(-200 * learning_rate, 200 * learning_rate)
-        new_blue = self.color[2] + np.random.randint(-200 * learning_rate, 200 * learning_rate)
+        # Modify the color of the creature
+        new_red = self.color[0] + np.random.randint(-100 * learning_rate, 100 * learning_rate)
+        new_green = self.color[1] + np.random.randint(-100 * learning_rate, 100 * learning_rate)
+        new_blue = self.color[2] + np.random.randint(-100 * learning_rate, 100 * learning_rate)
         new_red = min(max(new_red, 0), 255)
-        new_green = min(max(new_green, 0), 200)
+        new_green = min(max(new_green, 0), 200)  # Make sure that the creature is still visible on the background.
         new_blue = min(max(new_blue, 0), 255)
         self.color = (new_red, new_green, new_blue)
+
+        total_number = self.internal_to_output_weights.size + self.sensory_to_internal_weights.size
+        mutated = False
+        if USE_BIAS:
+            total_number += self.internal_biases.size + self.output_biases.size
+
+            if np.random.random() < self.internal_biases.size / total_number:
+                # Mutate internal biases
+                mutated = True
+            else:
+                total_number -= self.internal_biases.size
+                if np.random.random() < self.output_biases.size / total_number:
+                    # Mutate output biases
+                    mutated = True
+                else:
+                    total_number -= self.output_biases.size
+
+        if not mutated:
+            if np.random.random() < self.sensory_to_internal_weights.size / total_number:
+                # Mutate sensory to internal weights
+                print("mutate")
+            else:
+                # Mutate internal to output weights
+                print("mutate")
+
         if USE_BIAS and np.random.randint(0, 100) < 30:
             # Mutate bias
             if np.random.randint(0, 100) < 50:
