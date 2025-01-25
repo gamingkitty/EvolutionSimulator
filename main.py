@@ -9,7 +9,7 @@ import slider
 
 
 def fitness_function(creature_obj):
-    return max(70 - abs(creature_obj.x_coordinate), 0)
+    return max(100 - math.hypot(creature_obj.x_coordinate, creature_obj.y_coordinate), 0)
 
 
 def draw_text(screen, font, text, location, color=(255, 255, 255)):
@@ -21,9 +21,9 @@ def main():
     world_x = 256
     world_y = 128
 
-    creature_num = 100
-    creature_internal_neuron_num = 5
-    creature_mutation_rate = 0.00
+    creature_num = 200
+    creature_internal_neuron_num = 10
+    creature_mutation_rate = 0.1
     learning_rate = 0.1
     steps_to_reset = 200
     steps_per_tick = 1

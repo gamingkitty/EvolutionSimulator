@@ -49,11 +49,8 @@ def softmax(x):
 # with weights and internal neurons. It is the same for all the creatures, only weights differ.
 # In order to add a new action or sense you need to add the neuron types name to this list, and also
 # add its functionality to the sense function.
-sensory_neuron_list = np.array(["x_coordinate", "y_coordinate", "time", "always_active", "oscillating"])
+sensory_neuron_list = np.array(["x_coordinate", "y_coordinate", "time", "bias", "oscillating"])
 output_neuron_list = np.array(["move_up", "move_down", "move_left", "move_right", "nothing"])
-
-# Set this to true if you want creatures to use biases in their neural networks, otherwise false.
-USE_BIAS = True
 
 # The activation function used in the neural network.
 ACTIVATION_FUNCTION = vectorized_tanh
@@ -64,11 +61,9 @@ class Creature:
     def __init__(self, internal_neuron_number, starting_x, starting_y, create_from=None, mutate=False, learning_rate=0, chance_to_mutate=100):
         # Copy everything from another creature during initialization
         if create_from is not None:
-            self.sensory_to_internal_weights = create_from.sensory_to_internal_weights
-            self.internal_to_output_weights = create_from.internal_to_output_weights
-            if USE_BIAS:
-                self.internal_biases = create_from.internal_biases
-                self.output_biases = create_from.output_biases
+            self.sensory_to_internal_weights = np.copy(create_from.sensory_to_internal_weights)
+            self.internal_to_output_weights = np.copy(create_from.internal_to_output_weights)
+
             self.x_coordinate = create_from.x_coordinate
             self.y_coordinate = create_from.y_coordinate
             self.steps = create_from.steps
@@ -80,9 +75,6 @@ class Creature:
         else:
             self.sensory_to_internal_weights = np.random.rand(internal_neuron_number, len(sensory_neuron_list)) - 0.5
             self.internal_to_output_weights = np.random.rand(len(output_neuron_list), internal_neuron_number) - 0.5
-            if USE_BIAS:
-                self.internal_biases = (np.random.rand(internal_neuron_number) - 0.5)
-                self.output_biases = (np.random.rand(len(output_neuron_list)) - 0.5)
 
             self.x_coordinate = starting_x
             self.y_coordinate = starting_y
@@ -100,13 +92,13 @@ class Creature:
         if neuron_type == "x_coordinate":
             return self.x_coordinate/100
         elif neuron_type == "y_coordinate":
-            return self.y_coordinate/100
+            return self.y_coordinate / 100
         elif neuron_type == "time":
-            return self.steps/100
-        elif neuron_type == "always_active":
+            return self.steps / 100
+        elif neuron_type == "bias":
             return 1
         elif neuron_type == "oscillating":
-            return np.sin(self.steps)
+            return np.sin(self.steps / 3)
         else:
             raise ValueError(f"Invalid neuron type {neuron_type} to sense for.")
 
@@ -117,12 +109,8 @@ class Creature:
         move = self.vectorized_sense(sensory_neuron_list)
 
         # Apply weights and activation function to the input
-        if USE_BIAS:
-            move = ACTIVATION_FUNCTION(np.dot(self.sensory_to_internal_weights, move) + self.internal_biases)
-            move = softmax(np.dot(self.internal_to_output_weights, move) + self.output_biases)
-        else:
-            move = ACTIVATION_FUNCTION(np.dot(self.sensory_to_internal_weights, move))
-            move = softmax(np.dot(self.internal_to_output_weights, move))
+        move = ACTIVATION_FUNCTION(np.dot(self.sensory_to_internal_weights, move))
+        move = softmax(np.dot(self.internal_to_output_weights, move))
         # Get a string name to return for an action to make.
         move = output_neuron_list[np.argmax(move)]
 
@@ -168,56 +156,24 @@ class Creature:
     # modify the simulation to customize it is change the mutations, like how they work or the chances for different
     # mutations to happen.
     # Modify this so that it can set ones to 0 and it can also completely change weights instead of just adding or subtracting.
-    def mutate(self, learning_rate):
+    def mutate(self, learning_rate, mutation_probability=0.1):
         # Modify the color of the creature
-        new_red = self.color[0] + np.random.randint(-100 * learning_rate, 100 * learning_rate)
-        new_green = self.color[1] + np.random.randint(-100 * learning_rate, 100 * learning_rate)
-        new_blue = self.color[2] + np.random.randint(-100 * learning_rate, 100 * learning_rate)
+        new_red = self.color[0] + np.random.uniform(-100 * learning_rate, 100 * learning_rate)
+        new_green = self.color[1] + np.random.uniform(-100 * learning_rate, 100 * learning_rate)
+        new_blue = self.color[2] + np.random.uniform(-100 * learning_rate, 100 * learning_rate)
         new_red = min(max(new_red, 0), 255)
         new_green = min(max(new_green, 0), 200)  # Make sure that the creature is still visible on the background.
         new_blue = min(max(new_blue, 0), 255)
         self.color = (new_red, new_green, new_blue)
 
-        total_number = self.internal_to_output_weights.size + self.sensory_to_internal_weights.size
-        mutated = False
-        if USE_BIAS:
-            total_number += self.internal_biases.size + self.output_biases.size
+        def apply_mutation(weights):
+            mutation_mask = np.random.rand(*weights.shape) < mutation_probability
+            mutation_values = np.random.normal(loc=0.0, scale=learning_rate, size=weights.shape)
+            return weights + mutation_mask * mutation_values
 
-            if np.random.random() < self.internal_biases.size / total_number:
-                # Mutate internal biases
-                mutated = True
-            else:
-                total_number -= self.internal_biases.size
-                if np.random.random() < self.output_biases.size / total_number:
-                    # Mutate output biases
-                    mutated = True
-                else:
-                    total_number -= self.output_biases.size
-
-        if not mutated:
-            if np.random.random() < self.sensory_to_internal_weights.size / total_number:
-                # Mutate sensory to internal weights
-                print("mutate")
-            else:
-                # Mutate internal to output weights
-                print("mutate")
-
-        if USE_BIAS and np.random.randint(0, 100) < 30:
-            # Mutate bias
-            if np.random.randint(0, 100) < 50:
-                # Mutate random first layer bias
-                modify_random_elements(self.internal_biases, 0.2, learning_rate)
-            else:
-                # Mutate random second layer bias
-                modify_random_elements(self.output_biases, 0.2, learning_rate)
-        else:
-            # Mutate weight
-            if np.random.randint(0, 100) < 50:
-                # Mutate random first layer neurons weights
-                modify_random_elements(self.sensory_to_internal_weights, 0.1, learning_rate)
-            else:
-                # Mutate random second layer neurons weights
-                modify_random_elements(self.internal_to_output_weights, 0.1, learning_rate)
+        # Apply mutations to the weights
+        self.sensory_to_internal_weights = apply_mutation(self.sensory_to_internal_weights)
+        self.internal_to_output_weights = apply_mutation(self.internal_to_output_weights)
 
     # Randomizes the coordinates of the creature within the constraints of a given size.
     def randomize_coordinates(self, world_size_x, world_size_y):
